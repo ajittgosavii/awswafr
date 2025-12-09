@@ -1,0 +1,64 @@
+{
+  "sample_eks_assessment": {
+    "description": "Sample EKS environment for modernization planning",
+    "current_state": {
+      "eks_version": "1.28",
+      "node_groups": 3,
+      "current_autoscaling": "Cluster Autoscaler",
+      "workload_types": ["Stateless APIs", "Batch Jobs", "Event-driven"],
+      "cluster_count": 2,
+      "current_cicd": ["Jenkins", "AWS CodePipeline"],
+      "deployment_frequency": "Weekly",
+      "deployment_method": "Helm",
+      "environments": ["Development", "Staging", "Production"],
+      "monitoring_tools": ["CloudWatch", "Prometheus"],
+      "logging_solution": "CloudWatch Logs",
+      "security_tools": ["GuardDuty"],
+      "secrets_management": "Kubernetes Secrets",
+      "team_size": 5,
+      "kubernetes_experience": "Intermediate (1-3 years)",
+      "change_management": "Basic approval",
+      "compliance_requirements": ["SOC2", "GDPR"]
+    },
+    "recommended_tools": [
+      "karpenter",
+      "argocd",
+      "external_secrets_operator",
+      "prometheus_grafana",
+      "trivy_operator",
+      "kyverno",
+      "aws_load_balancer_controller"
+    ],
+    "goals": [
+      "Reduce deployment time from hours to minutes",
+      "Implement GitOps for all production workloads",
+      "Enable self-service deployments for development teams",
+      "Achieve zero-downtime deployments",
+      "Reduce infrastructure costs by 25%",
+      "Improve observability and alerting coverage"
+    ],
+    "constraints": [
+      "Limited budget for new tooling licenses",
+      "Team needs training on GitOps practices",
+      "Must maintain SOC2 compliance throughout migration",
+      "Production freeze during Q4 holidays",
+      "Gradual migration preferred over big-bang approach"
+    ]
+  },
+  "cicd_maturity_assessment": {
+    "current_level": "Managed",
+    "characteristics": [
+      "Basic CI pipeline exists (Jenkins)",
+      "Manual approval gates for production",
+      "Some automated testing (unit tests only)",
+      "Environment inconsistencies between dev/staging/prod"
+    ],
+    "target_level": "Defined",
+    "target_characteristics": [
+      "CI/CD pipeline fully defined with GitOps",
+      "Infrastructure as Code for all environments",
+      "Automated integration and security testing",
+      "Consistent environments via Helm/Kustomize"
+    ]
+  }
+}

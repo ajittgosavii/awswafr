@@ -1,0 +1,86 @@
+{
+  "architecture": {
+    "name": "E-Commerce Platform",
+    "environment": "Production",
+    "region": "us-east-1",
+    "components": {
+      "frontend": {
+        "type": "static_website",
+        "services": ["S3", "CloudFront"],
+        "cdn_enabled": true,
+        "waf_enabled": true,
+        "ssl_certificate": "ACM"
+      },
+      "compute": {
+        "type": "containers",
+        "service": "ECS Fargate",
+        "instances": 3,
+        "auto_scaling": true,
+        "load_balancer": "ALB"
+      },
+      "database": {
+        "type": "relational",
+        "service": "RDS PostgreSQL",
+        "instance_class": "db.r5.xlarge",
+        "multi_az": false,
+        "encryption_at_rest": false,
+        "automated_backups": true,
+        "backup_retention": 7
+      },
+      "cache": {
+        "service": "ElastiCache Redis",
+        "node_type": "cache.m5.large",
+        "cluster_mode": false,
+        "replicas": 0
+      },
+      "storage": {
+        "service": "S3",
+        "buckets": [
+          {
+            "name": "product-images",
+            "versioning": false,
+            "encryption": "none",
+            "public_access": true
+          },
+          {
+            "name": "user-uploads",
+            "versioning": false,
+            "encryption": "none",
+            "public_access": false
+          }
+        ]
+      },
+      "networking": {
+        "vpc": "default",
+        "subnets": "public",
+        "nat_gateway": false,
+        "vpc_endpoints": []
+      },
+      "security": {
+        "iam_roles": ["basic"],
+        "security_groups": "permissive",
+        "secrets_management": "environment_variables",
+        "encryption_in_transit": true
+      },
+      "monitoring": {
+        "cloudwatch_metrics": "basic",
+        "cloudwatch_logs": false,
+        "xray_tracing": false,
+        "custom_dashboards": false,
+        "alarms": ["cpu_high"]
+      },
+      "disaster_recovery": {
+        "backup_strategy": "daily",
+        "cross_region_replication": false,
+        "rpo_hours": 24,
+        "rto_hours": 8
+      }
+    }
+  },
+  "compliance_requirements": ["SOC2", "GDPR"],
+  "traffic_patterns": {
+    "daily_requests": 1000000,
+    "peak_multiplier": 3,
+    "data_transfer_gb_monthly": 500
+  }
+}
