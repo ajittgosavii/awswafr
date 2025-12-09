@@ -19,47 +19,85 @@ from pathlib import Path
 # Add modules to path
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Track module import errors for debugging
+MODULE_IMPORT_ERRORS = {}
+
 # Import modernization module
 try:
     from modules.eks_modernization import render_modernization_planner
     MODERNIZATION_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     MODERNIZATION_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['eks_modernization'] = str(e)
+except Exception as e:
+    MODERNIZATION_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['eks_modernization'] = str(e)
 
 # Import FinOps module
 try:
     from modules.finops_module import render_finops_module
     FINOPS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     FINOPS_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['finops_module'] = str(e)
+except Exception as e:
+    FINOPS_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['finops_module'] = str(e)
 
 # Import Compliance module
 try:
     from modules.compliance_module import render_compliance_module
     COMPLIANCE_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     COMPLIANCE_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['compliance_module'] = str(e)
+except Exception as e:
+    COMPLIANCE_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['compliance_module'] = str(e)
 
 # Import Migration & DR module
 try:
     from modules.migration_dr_module import render_migration_dr_module
     MIGRATION_DR_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     MIGRATION_DR_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['migration_dr_module'] = str(e)
+except Exception as e:
+    MIGRATION_DR_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['migration_dr_module'] = str(e)
 
 # Import AWS Connector module
 try:
     from modules.aws_connector import render_aws_connector_module
     AWS_CONNECTOR_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     AWS_CONNECTOR_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['aws_connector'] = str(e)
+except Exception as e:
+    AWS_CONNECTOR_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['aws_connector'] = str(e)
 
 # Import Multi-Account WAR Scanner module
 try:
     from modules.war_scanner import render_multi_account_war_scanner
     WAR_SCANNER_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     WAR_SCANNER_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['war_scanner'] = str(e)
+except Exception as e:
+    WAR_SCANNER_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['war_scanner'] = str(e)
+
+# Import One-Touch Landscape Scanner module
+try:
+    from modules.landscape_scanner import render_one_touch_scanner
+    LANDSCAPE_SCANNER_AVAILABLE = True
+except ImportError as e:
+    LANDSCAPE_SCANNER_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['landscape_scanner'] = str(e)
+except Exception as e:
+    LANDSCAPE_SCANNER_AVAILABLE = False
+    MODULE_IMPORT_ERRORS['landscape_scanner'] = str(e)
 
 # Page Configuration
 st.set_page_config(
@@ -332,29 +370,52 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = value
     
-    # Check for secrets-based API key
-    if "anthropic_api_key" not in st.session_state:
+    # Check for secrets-based API key - try multiple formats
+    if "anthropic_api_key" not in st.session_state or not st.session_state.get("anthropic_api_key"):
+        api_key = None
         try:
+            # Format 1: Direct ANTHROPIC_API_KEY
             if hasattr(st, 'secrets') and "ANTHROPIC_API_KEY" in st.secrets:
-                st.session_state.anthropic_api_key = st.secrets["ANTHROPIC_API_KEY"]
-                st.session_state.api_key_valid = True
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
         except Exception:
             pass
+        
+        if not api_key:
+            try:
+                # Format 2: Nested [anthropic] section
+                if hasattr(st, 'secrets') and "anthropic" in st.secrets:
+                    api_key = st.secrets["anthropic"].get("api_key")
+            except Exception:
+                pass
+        
+        if api_key:
+            st.session_state.anthropic_api_key = api_key
+            st.session_state.api_key_valid = True
 
 
 def get_anthropic_client() -> Optional[anthropic.Anthropic]:
     """Initialize Anthropic client with API key from secrets or user input"""
-    # Try secrets first, then session state
     api_key = None
     
-    try:
-        if hasattr(st, 'secrets') and "ANTHROPIC_API_KEY" in st.secrets:
-            api_key = st.secrets["ANTHROPIC_API_KEY"]
-    except Exception:
-        pass
+    # Try session state first (populated by sidebar or init)
+    api_key = st.session_state.get("anthropic_api_key", "")
+    
+    # If not in session state, try secrets directly
+    if not api_key:
+        try:
+            # Format 1: Direct ANTHROPIC_API_KEY
+            if hasattr(st, 'secrets') and "ANTHROPIC_API_KEY" in st.secrets:
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
+        except Exception:
+            pass
     
     if not api_key:
-        api_key = st.session_state.get("anthropic_api_key", "")
+        try:
+            # Format 2: Nested [anthropic] section
+            if hasattr(st, 'secrets') and "anthropic" in st.secrets:
+                api_key = st.secrets["anthropic"].get("api_key")
+        except Exception:
+            pass
     
     if api_key:
         try:
@@ -558,32 +619,84 @@ def render_sidebar():
     with st.sidebar:
         st.markdown("### ⚙️ Configuration")
         
-        # Check if API key is in secrets
+        # Check if API key is in secrets - try multiple formats
         has_secret_key = False
+        secret_api_key = None
+        
         try:
+            # Format 1: Direct ANTHROPIC_API_KEY
             if hasattr(st, 'secrets') and "ANTHROPIC_API_KEY" in st.secrets:
-                has_secret_key = True
+                secret_api_key = st.secrets["ANTHROPIC_API_KEY"]
+                has_secret_key = bool(secret_api_key)
         except Exception:
             pass
         
-        if has_secret_key:
+        if not has_secret_key:
+            try:
+                # Format 2: Nested [anthropic] section
+                if hasattr(st, 'secrets') and "anthropic" in st.secrets:
+                    secret_api_key = st.secrets["anthropic"].get("api_key")
+                    has_secret_key = bool(secret_api_key)
+            except Exception:
+                pass
+        
+        if has_secret_key and secret_api_key:
             st.success("✓ API Key configured via secrets")
             st.session_state.api_key_valid = True
+            st.session_state.anthropic_api_key = secret_api_key
         else:
             # API Key input
             api_key = st.text_input(
                 "Anthropic API Key",
                 type="password",
                 help="Enter your Anthropic API key to enable AI analysis",
-                key="anthropic_api_key"
+                key="anthropic_api_key_input"
             )
             
             if api_key:
                 st.success("✓ API Key configured")
                 st.session_state.api_key_valid = True
+                st.session_state.anthropic_api_key = api_key
             else:
                 st.warning("⚠️ API Key required for analysis")
                 st.session_state.api_key_valid = False
+        
+        st.markdown("---")
+        
+        # Module Status Section
+        st.markdown("### 📦 Module Status")
+        
+        modules_status = {
+            "AWS Connector": AWS_CONNECTOR_AVAILABLE,
+            "One-Touch Scanner": LANDSCAPE_SCANNER_AVAILABLE,
+            "WAR Scanner": WAR_SCANNER_AVAILABLE,
+            "EKS & CI/CD": MODERNIZATION_AVAILABLE,
+            "FinOps": FINOPS_AVAILABLE,
+            "Compliance": COMPLIANCE_AVAILABLE,
+            "Migration & DR": MIGRATION_DR_AVAILABLE
+        }
+        
+        available_count = sum(modules_status.values())
+        total_count = len(modules_status)
+        
+        if available_count == total_count:
+            st.success(f"✅ All {total_count} modules loaded")
+        else:
+            st.warning(f"⚠️ {available_count}/{total_count} modules loaded")
+            
+            # Show which modules failed
+            with st.expander("View module details"):
+                for name, available in modules_status.items():
+                    if available:
+                        st.markdown(f"✅ {name}")
+                    else:
+                        st.markdown(f"❌ {name}")
+                
+                # Show import errors if any
+                if MODULE_IMPORT_ERRORS:
+                    st.markdown("**Import Errors:**")
+                    for module, error in MODULE_IMPORT_ERRORS.items():
+                        st.code(f"{module}: {error}", language="text")
         
         st.markdown("---")
         
@@ -959,6 +1072,10 @@ def main():
     if AWS_CONNECTOR_AVAILABLE:
         tab_names.append("🔌 AWS Connector")
     
+    # One-Touch Landscape Scanner
+    if LANDSCAPE_SCANNER_AVAILABLE:
+        tab_names.append("🎯 One-Touch Scan")
+    
     # WAR Scanner for multi-account analysis
     if WAR_SCANNER_AVAILABLE:
         tab_names.append("🔍 Multi-Account WAR")
@@ -988,6 +1105,12 @@ def main():
     if AWS_CONNECTOR_AVAILABLE:
         with all_tabs[tab_idx]:
             render_aws_connector_module()
+        tab_idx += 1
+    
+    # Tab: One-Touch Landscape Scanner (if available)
+    if LANDSCAPE_SCANNER_AVAILABLE:
+        with all_tabs[tab_idx]:
+            render_one_touch_scanner()
         tab_idx += 1
     
     # Tab: Multi-Account WAR Scanner (if available)

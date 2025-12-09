@@ -26,32 +26,57 @@ from enum import Enum
 import concurrent.futures
 import time
 
-# Import secrets helper
+# Import secrets helper - make it truly optional
+SECRETS_HELPER_AVAILABLE = False
+get_aws_credentials = None
+get_aws_organization_config = None
+get_aws_regions_config = None
+get_app_config = None
+render_secrets_status = None
+render_manual_credentials_input = None
+AWSCredentials = None
+
 try:
     from .secrets_helper import (
-        get_aws_credentials,
-        get_aws_organization_config,
-        get_aws_regions_config,
-        get_app_config,
-        render_secrets_status,
-        render_manual_credentials_input,
-        AWSCredentials
+        get_aws_credentials as _get_aws_credentials,
+        get_aws_organization_config as _get_aws_organization_config,
+        get_aws_regions_config as _get_aws_regions_config,
+        get_app_config as _get_app_config,
+        render_secrets_status as _render_secrets_status,
+        render_manual_credentials_input as _render_manual_credentials_input,
+        AWSCredentials as _AWSCredentials
     )
+    get_aws_credentials = _get_aws_credentials
+    get_aws_organization_config = _get_aws_organization_config
+    get_aws_regions_config = _get_aws_regions_config
+    get_app_config = _get_app_config
+    render_secrets_status = _render_secrets_status
+    render_manual_credentials_input = _render_manual_credentials_input
+    AWSCredentials = _AWSCredentials
     SECRETS_HELPER_AVAILABLE = True
 except ImportError:
     try:
         from modules.secrets_helper import (
-            get_aws_credentials,
-            get_aws_organization_config,
-            get_aws_regions_config,
-            get_app_config,
-            render_secrets_status,
-            render_manual_credentials_input,
-            AWSCredentials
+            get_aws_credentials as _get_aws_credentials,
+            get_aws_organization_config as _get_aws_organization_config,
+            get_aws_regions_config as _get_aws_regions_config,
+            get_app_config as _get_app_config,
+            render_secrets_status as _render_secrets_status,
+            render_manual_credentials_input as _render_manual_credentials_input,
+            AWSCredentials as _AWSCredentials
         )
+        get_aws_credentials = _get_aws_credentials
+        get_aws_organization_config = _get_aws_organization_config
+        get_aws_regions_config = _get_aws_regions_config
+        get_app_config = _get_app_config
+        render_secrets_status = _render_secrets_status
+        render_manual_credentials_input = _render_manual_credentials_input
+        AWSCredentials = _AWSCredentials
         SECRETS_HELPER_AVAILABLE = True
     except ImportError:
-        SECRETS_HELPER_AVAILABLE = False
+        pass
+except Exception:
+    pass
 
 # ============================================================================
 # CONFIGURATION

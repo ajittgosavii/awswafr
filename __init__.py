@@ -83,6 +83,24 @@ try:
 except ImportError:
     WAR_SCANNER_AVAILABLE = False
 
+# One-Touch Landscape Scanner Module
+try:
+    from .landscape_scanner import (
+        render_one_touch_scanner,
+        AWSLandscapeScanner,
+        LandscapeAssessment
+    )
+    LANDSCAPE_SCANNER_AVAILABLE = True
+except ImportError:
+    LANDSCAPE_SCANNER_AVAILABLE = False
+
+# PDF Report Generator Module
+try:
+    from .pdf_report_generator import generate_waf_pdf_report
+    PDF_GENERATOR_AVAILABLE = True
+except ImportError:
+    PDF_GENERATOR_AVAILABLE = False
+
 __all__ = [
     # EKS Module
     'render_modernization_planner',
@@ -121,6 +139,14 @@ __all__ = [
     # WAR Scanner Module
     'render_multi_account_war_scanner',
     'WAR_ASSESSMENT_AREAS',
-    'WAR_SCANNER_AVAILABLE'
+    'WAR_SCANNER_AVAILABLE',
+    # Landscape Scanner Module
+    'render_one_touch_scanner',
+    'AWSLandscapeScanner',
+    'LandscapeAssessment',
+    'LANDSCAPE_SCANNER_AVAILABLE',
+    # PDF Generator Module
+    'generate_waf_pdf_report',
+    'PDF_GENERATOR_AVAILABLE'
 ]
 
