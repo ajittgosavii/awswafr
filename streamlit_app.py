@@ -14,90 +14,99 @@ from datetime import datetime
 from typing import Optional, Dict, List, Any
 import re
 import sys
+import os
 from pathlib import Path
 
-# Add modules to path
-sys.path.insert(0, str(Path(__file__).parent))
+# CRITICAL: Add the app directory to Python path FIRST
+# This ensures modules can be found when running from any directory
+APP_DIR = Path(__file__).parent.absolute()
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
+# Also ensure we're in the right working directory
+os.chdir(APP_DIR)
+
+# Debug info (can be enabled via secrets or environment)
+DEBUG_MODE = os.environ.get('DEBUG', 'false').lower() == 'true'
+try:
+    DEBUG_MODE = DEBUG_MODE or st.secrets.get('DEBUG', False)
+except:
+    pass
+
+# Check that modules directory exists
+MODULES_DIR = APP_DIR / 'modules'
+MODULES_EXIST = MODULES_DIR.exists()
 
 # Track module import errors for debugging
 MODULE_IMPORT_ERRORS = {}
 
+if not MODULES_EXIST:
+    MODULE_IMPORT_ERRORS['_system'] = f"modules directory not found at {MODULES_DIR}. Contents of {APP_DIR}: {list(APP_DIR.iterdir())}"
+
+def safe_import(module_name, from_list):
+    """Safely import a module with detailed error reporting"""
+    try:
+        import importlib
+        module = importlib.import_module(f'modules.{module_name}')
+        results = {}
+        for name in from_list:
+            if hasattr(module, name):
+                results[name] = getattr(module, name)
+            else:
+                raise ImportError(f"'{name}' not found in modules.{module_name}")
+        return True, results, None
+    except Exception as e:
+        import traceback
+        return False, {}, f"{type(e).__name__}: {str(e)}"
+
 # Import modernization module
-try:
-    from modules.eks_modernization import render_modernization_planner
-    MODERNIZATION_AVAILABLE = True
-except ImportError as e:
-    MODERNIZATION_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['eks_modernization'] = str(e)
-except Exception as e:
-    MODERNIZATION_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['eks_modernization'] = str(e)
+MODERNIZATION_AVAILABLE, _mod, _err = safe_import('eks_modernization', ['render_modernization_planner'])
+if MODERNIZATION_AVAILABLE:
+    render_modernization_planner = _mod['render_modernization_planner']
+else:
+    MODULE_IMPORT_ERRORS['eks_modernization'] = _err
 
 # Import FinOps module
-try:
-    from modules.finops_module import render_finops_module
-    FINOPS_AVAILABLE = True
-except ImportError as e:
-    FINOPS_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['finops_module'] = str(e)
-except Exception as e:
-    FINOPS_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['finops_module'] = str(e)
+FINOPS_AVAILABLE, _mod, _err = safe_import('finops_module', ['render_finops_module'])
+if FINOPS_AVAILABLE:
+    render_finops_module = _mod['render_finops_module']
+else:
+    MODULE_IMPORT_ERRORS['finops_module'] = _err
 
 # Import Compliance module
-try:
-    from modules.compliance_module import render_compliance_module
-    COMPLIANCE_AVAILABLE = True
-except ImportError as e:
-    COMPLIANCE_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['compliance_module'] = str(e)
-except Exception as e:
-    COMPLIANCE_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['compliance_module'] = str(e)
+COMPLIANCE_AVAILABLE, _mod, _err = safe_import('compliance_module', ['render_compliance_module'])
+if COMPLIANCE_AVAILABLE:
+    render_compliance_module = _mod['render_compliance_module']
+else:
+    MODULE_IMPORT_ERRORS['compliance_module'] = _err
 
 # Import Migration & DR module
-try:
-    from modules.migration_dr_module import render_migration_dr_module
-    MIGRATION_DR_AVAILABLE = True
-except ImportError as e:
-    MIGRATION_DR_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['migration_dr_module'] = str(e)
-except Exception as e:
-    MIGRATION_DR_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['migration_dr_module'] = str(e)
+MIGRATION_DR_AVAILABLE, _mod, _err = safe_import('migration_dr_module', ['render_migration_dr_module'])
+if MIGRATION_DR_AVAILABLE:
+    render_migration_dr_module = _mod['render_migration_dr_module']
+else:
+    MODULE_IMPORT_ERRORS['migration_dr_module'] = _err
 
 # Import AWS Connector module
-try:
-    from modules.aws_connector import render_aws_connector_module
-    AWS_CONNECTOR_AVAILABLE = True
-except ImportError as e:
-    AWS_CONNECTOR_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['aws_connector'] = str(e)
-except Exception as e:
-    AWS_CONNECTOR_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['aws_connector'] = str(e)
+AWS_CONNECTOR_AVAILABLE, _mod, _err = safe_import('aws_connector', ['render_aws_connector_module'])
+if AWS_CONNECTOR_AVAILABLE:
+    render_aws_connector_module = _mod['render_aws_connector_module']
+else:
+    MODULE_IMPORT_ERRORS['aws_connector'] = _err
 
 # Import Multi-Account WAR Scanner module
-try:
-    from modules.war_scanner import render_multi_account_war_scanner
-    WAR_SCANNER_AVAILABLE = True
-except ImportError as e:
-    WAR_SCANNER_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['war_scanner'] = str(e)
-except Exception as e:
-    WAR_SCANNER_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['war_scanner'] = str(e)
+WAR_SCANNER_AVAILABLE, _mod, _err = safe_import('war_scanner', ['render_multi_account_war_scanner'])
+if WAR_SCANNER_AVAILABLE:
+    render_multi_account_war_scanner = _mod['render_multi_account_war_scanner']
+else:
+    MODULE_IMPORT_ERRORS['war_scanner'] = _err
 
 # Import One-Touch Landscape Scanner module
-try:
-    from modules.landscape_scanner import render_one_touch_scanner
-    LANDSCAPE_SCANNER_AVAILABLE = True
-except ImportError as e:
-    LANDSCAPE_SCANNER_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['landscape_scanner'] = str(e)
-except Exception as e:
-    LANDSCAPE_SCANNER_AVAILABLE = False
-    MODULE_IMPORT_ERRORS['landscape_scanner'] = str(e)
+LANDSCAPE_SCANNER_AVAILABLE, _mod, _err = safe_import('landscape_scanner', ['render_one_touch_scanner'])
+if LANDSCAPE_SCANNER_AVAILABLE:
+    render_one_touch_scanner = _mod['render_one_touch_scanner']
+else:
+    MODULE_IMPORT_ERRORS['landscape_scanner'] = _err
 
 # Page Configuration
 st.set_page_config(
@@ -697,6 +706,10 @@ def render_sidebar():
                     st.markdown("**Import Errors:**")
                     for module, error in MODULE_IMPORT_ERRORS.items():
                         st.code(f"{module}: {error}", language="text")
+                
+                # Show debug info
+                st.markdown("**Debug Info:**")
+                st.code(f"APP_DIR: {APP_DIR}\nModules exist: {MODULES_EXIST}\nsys.path[0]: {sys.path[0]}", language="text")
         
         st.markdown("---")
         

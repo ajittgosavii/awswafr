@@ -34,12 +34,12 @@ import os
 # Try to import landscape scanner types
 try:
     from .landscape_scanner import LandscapeAssessment, Finding, WAFPillar, PillarScore
-except ImportError:
-    try:
-        from modules.landscape_scanner import LandscapeAssessment, Finding, WAFPillar, PillarScore
-    except ImportError:
-        # Define minimal types for standalone use
-        pass
+except (ImportError, Exception):
+    # Define minimal types for standalone use
+    LandscapeAssessment = None
+    Finding = None
+    WAFPillar = None
+    PillarScore = None
 
 
 # ============================================================================

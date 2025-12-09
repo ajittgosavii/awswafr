@@ -54,28 +54,8 @@ try:
     render_manual_credentials_input = _render_manual_credentials_input
     AWSCredentials = _AWSCredentials
     SECRETS_HELPER_AVAILABLE = True
-except ImportError:
-    try:
-        from modules.secrets_helper import (
-            get_aws_credentials as _get_aws_credentials,
-            get_aws_organization_config as _get_aws_organization_config,
-            get_aws_regions_config as _get_aws_regions_config,
-            get_app_config as _get_app_config,
-            render_secrets_status as _render_secrets_status,
-            render_manual_credentials_input as _render_manual_credentials_input,
-            AWSCredentials as _AWSCredentials
-        )
-        get_aws_credentials = _get_aws_credentials
-        get_aws_organization_config = _get_aws_organization_config
-        get_aws_regions_config = _get_aws_regions_config
-        get_app_config = _get_app_config
-        render_secrets_status = _render_secrets_status
-        render_manual_credentials_input = _render_manual_credentials_input
-        AWSCredentials = _AWSCredentials
-        SECRETS_HELPER_AVAILABLE = True
-    except ImportError:
-        pass
-except Exception:
+except (ImportError, Exception):
+    # Secrets helper not available - will use manual input
     pass
 
 # ============================================================================

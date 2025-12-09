@@ -19,23 +19,26 @@ from typing import Dict, List, Optional
 import concurrent.futures
 
 # Import connector
+AWS_CONNECTOR_AVAILABLE = False
+AWSOrganizationConnector = None
+AWSSessionManager = None
+AWS_REGIONS = None
+
 try:
     from .aws_connector import (
-        AWSOrganizationConnector,
-        AWSSessionManager,
-        AWS_REGIONS
+        AWSOrganizationConnector as _AWSOrganizationConnector,
+        AWSSessionManager as _AWSSessionManager,
+        AWS_REGIONS as _AWS_REGIONS
     )
+    AWSOrganizationConnector = _AWSOrganizationConnector
+    AWSSessionManager = _AWSSessionManager
+    AWS_REGIONS = _AWS_REGIONS
     AWS_CONNECTOR_AVAILABLE = True
-except ImportError:
-    try:
-        from modules.aws_connector import (
-            AWSOrganizationConnector,
-            AWSSessionManager,
-            AWS_REGIONS
-        )
-        AWS_CONNECTOR_AVAILABLE = True
-    except ImportError:
-        AWS_CONNECTOR_AVAILABLE = False
+except (ImportError, Exception):
+    # Connector not available - will need to handle gracefully
+    AWS_REGIONS = [
+        "us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1", "ap-northeast-1"
+    ]
 
 
 # ============================================================================
