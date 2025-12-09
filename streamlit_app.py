@@ -283,41 +283,73 @@ def get_api_key() -> Optional[str]:
 
 def get_aws_credentials() -> Optional[AWSCredentials]:
     """Get AWS credentials from various sources"""
-    # Check session state first
+    # Check session state first (manual input takes priority)
     if st.session_state.get('aws_credentials'):
         return st.session_state.aws_credentials
     
-    # Check Streamlit secrets
+    # Check Streamlit secrets - try multiple formats
     try:
-        if hasattr(st, 'secrets') and 'aws' in st.secrets:
-            aws_secrets = st.secrets['aws']
-            if 'access_key_id' in aws_secrets and 'secret_access_key' in aws_secrets:
+        if hasattr(st, 'secrets'):
+            # Format 1: [aws] section
+            if 'aws' in st.secrets:
+                aws_secrets = st.secrets['aws']
+                access_key = aws_secrets.get('access_key_id') or aws_secrets.get('ACCESS_KEY_ID')
+                secret_key = aws_secrets.get('secret_access_key') or aws_secrets.get('SECRET_ACCESS_KEY')
+                
+                if access_key and secret_key:
+                    creds = AWSCredentials(
+                        access_key_id=access_key,
+                        secret_access_key=secret_key,
+                        session_token=aws_secrets.get('session_token') or aws_secrets.get('SESSION_TOKEN'),
+                        region=aws_secrets.get('default_region') or aws_secrets.get('region') or aws_secrets.get('AWS_REGION') or 'us-east-1',
+                        source="secrets"
+                    )
+                    return creds
+            
+            # Format 2: Flat AWS_ prefixed keys
+            access_key = st.secrets.get('AWS_ACCESS_KEY_ID')
+            secret_key = st.secrets.get('AWS_SECRET_ACCESS_KEY')
+            if access_key and secret_key:
                 return AWSCredentials(
-                    access_key_id=aws_secrets['access_key_id'],
-                    secret_access_key=aws_secrets['secret_access_key'],
-                    session_token=aws_secrets.get('session_token'),
-                    region=aws_secrets.get('default_region', 'us-east-1'),
+                    access_key_id=access_key,
+                    secret_access_key=secret_key,
+                    session_token=st.secrets.get('AWS_SESSION_TOKEN'),
+                    region=st.secrets.get('AWS_REGION', 'us-east-1'),
                     source="secrets"
                 )
-    except Exception:
+    except Exception as e:
         pass
     
     return None
 
 def init_session_state():
     """Initialize session state variables"""
+    # Get credentials from secrets on first load
+    api_key = get_api_key()
+    aws_creds = get_aws_credentials()
+    
     defaults = {
-        'anthropic_api_key': get_api_key(),
-        'aws_credentials': None,
-        'aws_connected': False,
+        'anthropic_api_key': api_key,
+        'aws_credentials': aws_creds,
+        'aws_connected': aws_creds is not None,
         'aws_session': None,
         'analysis_results': None,
         'organization_context': '',
-        'landscape_assessment': None
+        'landscape_assessment': None,
+        'app_mode': 'demo'  # 'demo' or 'live'
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    
+    # Auto-create AWS session if credentials available
+    if st.session_state.aws_credentials and not st.session_state.aws_session and BOTO3_AVAILABLE:
+        session = create_aws_session(st.session_state.aws_credentials)
+        if session:
+            success, _ = test_aws_connection(session)
+            if success:
+                st.session_state.aws_session = session
+                st.session_state.aws_connected = True
 
 def get_anthropic_client():
     """Get Anthropic client"""
@@ -714,6 +746,242 @@ class AWSLandscapeScanner:
             return "Critical"
 
 # ============================================================================
+# DEMO MODE DATA GENERATOR
+# ============================================================================
+
+def generate_demo_assessment() -> LandscapeAssessment:
+    """Generate realistic demo data for demonstration purposes"""
+    
+    # Create demo findings
+    demo_findings = [
+        Finding(
+            id="demo-iam-001",
+            title="IAM Users Without MFA",
+            description="3 IAM users do not have MFA enabled, increasing risk of unauthorized access",
+            severity="HIGH",
+            pillar="Security",
+            source_service="IAM",
+            affected_resources=["user-developer1", "user-developer2", "user-admin"],
+            recommendation="Enable MFA for all IAM users immediately",
+            effort="Low"
+        ),
+        Finding(
+            id="demo-s3-001",
+            title="S3 Bucket with Public Access",
+            description="Bucket 'company-public-assets' has public read access enabled",
+            severity="MEDIUM",
+            pillar="Security",
+            source_service="S3",
+            affected_resources=["company-public-assets"],
+            recommendation="Review if public access is required; if not, remove public ACLs",
+            effort="Low"
+        ),
+        Finding(
+            id="demo-rds-001",
+            title="RDS Instance Not Multi-AZ",
+            description="Production database 'prod-db-mysql' is not configured for Multi-AZ deployment",
+            severity="HIGH",
+            pillar="Reliability",
+            source_service="RDS",
+            affected_resources=["prod-db-mysql"],
+            recommendation="Enable Multi-AZ for production databases to ensure high availability",
+            effort="Medium"
+        ),
+        Finding(
+            id="demo-rds-002",
+            title="RDS Storage Not Encrypted",
+            description="Database 'dev-db-postgres' does not have encryption at rest enabled",
+            severity="HIGH",
+            pillar="Security",
+            source_service="RDS",
+            affected_resources=["dev-db-postgres"],
+            recommendation="Enable encryption at rest for all databases",
+            effort="High"
+        ),
+        Finding(
+            id="demo-ec2-001",
+            title="Unattached EBS Volumes",
+            description="5 EBS volumes are not attached to any instance, incurring unnecessary costs",
+            severity="LOW",
+            pillar="Cost Optimization",
+            source_service="EC2",
+            affected_resources=["vol-0a1b2c3d4e5f", "vol-1a2b3c4d5e6f", "vol-2a3b4c5d6e7f", "vol-3a4b5c6d7e8f", "vol-4a5b6c7d8e9f"],
+            recommendation="Delete unattached volumes or attach them to instances",
+            estimated_savings=150.0,
+            effort="Low"
+        ),
+        Finding(
+            id="demo-vpc-001",
+            title="VPC Without Flow Logs",
+            description="Main production VPC does not have flow logs enabled",
+            severity="MEDIUM",
+            pillar="Security",
+            source_service="VPC",
+            affected_resources=["vpc-main-production"],
+            recommendation="Enable VPC flow logs for network traffic analysis and security monitoring",
+            effort="Low"
+        ),
+        Finding(
+            id="demo-ct-001",
+            title="CloudTrail Not Multi-Region",
+            description="CloudTrail is only configured for us-east-1 region",
+            severity="MEDIUM",
+            pillar="Security",
+            source_service="CloudTrail",
+            affected_resources=["main-trail"],
+            recommendation="Enable multi-region CloudTrail for comprehensive audit logging",
+            effort="Low"
+        ),
+        Finding(
+            id="demo-ec2-002",
+            title="EC2 Instances Using Previous Generation",
+            description="8 EC2 instances are using previous generation instance types (m4, c4)",
+            severity="LOW",
+            pillar="Performance Efficiency",
+            source_service="EC2",
+            affected_resources=["i-0a1b2c3d", "i-1a2b3c4d", "i-2a3b4c5d"],
+            recommendation="Migrate to current generation instances (m6i, c6i) for better price-performance",
+            estimated_savings=320.0,
+            effort="Medium"
+        ),
+        Finding(
+            id="demo-backup-001",
+            title="No Backup Plan for Critical Resources",
+            description="Critical EC2 instances and RDS databases are not covered by AWS Backup plans",
+            severity="HIGH",
+            pillar="Reliability",
+            source_service="AWS Backup",
+            affected_resources=["prod-web-server", "prod-db-mysql"],
+            recommendation="Create comprehensive backup plans for all critical resources",
+            effort="Medium"
+        ),
+        Finding(
+            id="demo-lambda-001",
+            title="Lambda Functions with Excessive Permissions",
+            description="3 Lambda functions have overly permissive IAM roles with admin access",
+            severity="HIGH",
+            pillar="Security",
+            source_service="Lambda",
+            affected_resources=["data-processor", "api-handler", "event-trigger"],
+            recommendation="Apply least privilege principle to Lambda execution roles",
+            effort="Medium"
+        ),
+        Finding(
+            id="demo-cost-001",
+            title="Reserved Instance Opportunity",
+            description="On-demand EC2 usage pattern suggests RI purchase could save costs",
+            severity="INFO",
+            pillar="Cost Optimization",
+            source_service="Cost Explorer",
+            affected_resources=["ec2-fleet"],
+            recommendation="Purchase 1-year Reserved Instances for steady-state workloads",
+            estimated_savings=2400.0,
+            effort="Low"
+        ),
+        Finding(
+            id="demo-tag-001",
+            title="Resources Missing Required Tags",
+            description="47 resources are missing required tags (Environment, Owner, CostCenter)",
+            severity="MEDIUM",
+            pillar="Operational Excellence",
+            source_service="Resource Groups",
+            affected_resources=["Multiple resources"],
+            recommendation="Implement tagging policy and remediate untagged resources",
+            effort="Medium"
+        ),
+    ]
+    
+    # Create demo inventory
+    demo_inventory = ResourceInventory(
+        ec2_instances=24,
+        ec2_running=18,
+        rds_instances=6,
+        rds_multi_az=4,
+        s3_buckets=15,
+        s3_public=1,
+        lambda_functions=12,
+        eks_clusters=2,
+        vpcs=3,
+        load_balancers=4,
+        ebs_volumes=42,
+        ebs_unattached=5,
+        iam_users=28,
+        iam_users_no_mfa=3,
+        iam_roles=45
+    )
+    
+    # Calculate pillar scores
+    pillar_findings = {}
+    for pillar in ['Security', 'Reliability', 'Performance Efficiency', 'Cost Optimization', 'Operational Excellence', 'Sustainability']:
+        pillar_findings[pillar] = [f for f in demo_findings if f.pillar == pillar]
+    
+    pillar_scores = {}
+    for pillar, findings_list in pillar_findings.items():
+        critical = sum(1 for f in findings_list if f.severity == 'CRITICAL')
+        high = sum(1 for f in findings_list if f.severity == 'HIGH')
+        medium = sum(1 for f in findings_list if f.severity == 'MEDIUM')
+        low = sum(1 for f in findings_list if f.severity in ['LOW', 'INFO'])
+        
+        score = 100 - (critical * 15) - (high * 8) - (medium * 3) - (low * 1)
+        score = max(0, min(100, score))
+        
+        pillar_scores[pillar] = {
+            'score': score,
+            'findings_count': len(findings_list),
+            'critical_count': critical,
+            'high_count': high,
+            'medium_count': medium,
+            'low_count': low,
+            'top_findings': sorted(findings_list, key=lambda f: {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3, 'INFO': 4}.get(f.severity, 5))[:5]
+        }
+    
+    # Calculate overall score
+    weights = {'Security': 1.5, 'Reliability': 1.2, 'Performance Efficiency': 1.0, 
+               'Cost Optimization': 1.0, 'Operational Excellence': 1.0, 'Sustainability': 0.8}
+    
+    weighted_score = sum(pillar_scores[p]['score'] * weights.get(p, 1.0) for p in pillar_scores)
+    total_weight = sum(weights.get(p, 1.0) for p in pillar_scores)
+    overall_score = int(weighted_score / total_weight)
+    
+    # Determine risk level
+    if overall_score >= 80:
+        risk = "Low"
+    elif overall_score >= 60:
+        risk = "Medium"
+    elif overall_score >= 40:
+        risk = "High"
+    else:
+        risk = "Critical"
+    
+    # Create assessment
+    assessment = LandscapeAssessment(
+        assessment_id=f"demo-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        timestamp=datetime.now(),
+        accounts_scanned=["123456789012"],
+        regions_scanned=["us-east-1", "us-west-2"],
+        overall_score=overall_score,
+        overall_risk=risk,
+        inventory=demo_inventory,
+        monthly_cost=12450.00,
+        savings_opportunities=2870.0,
+        pillar_scores=pillar_scores,
+        findings=demo_findings,
+        services_scanned={
+            "IAM Analysis": True,
+            "S3 Buckets": True,
+            "EC2 Instances": True,
+            "RDS Databases": True,
+            "VPC Configuration": True,
+            "CloudTrail": True,
+            "Lambda Functions": True,
+            "Cost Explorer": True
+        },
+        scan_errors={}
+    )
+    
+    return assessment
+
+# ============================================================================
 # PDF REPORT GENERATOR
 # ============================================================================
 
@@ -911,6 +1179,26 @@ def render_sidebar():
     """Render sidebar with configuration"""
     with st.sidebar:
         st.image("https://a0.awsstatic.com/libra-css/images/logos/aws_smile-header-desktop-en-white_59x35.png", width=80)
+        
+        # Mode Toggle - PROMINENT
+        st.markdown("### 🎮 Mode")
+        mode = st.radio(
+            "Select Mode",
+            ["🎭 Demo", "🔴 Live"],
+            index=0 if st.session_state.get('app_mode', 'demo') == 'demo' else 1,
+            horizontal=True,
+            help="Demo uses sample data; Live connects to real AWS"
+        )
+        st.session_state.app_mode = 'demo' if '🎭' in mode else 'live'
+        
+        if st.session_state.app_mode == 'demo':
+            st.info("📋 Demo mode uses realistic sample data. No AWS credentials needed.")
+        else:
+            st.warning("🔴 Live mode connects to your real AWS account.")
+        
+        st.markdown("---")
+        
+        # Configuration
         st.markdown("### ⚙️ Configuration")
         
         # API Key
@@ -930,27 +1218,45 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # AWS Credentials
+        # AWS Credentials (only relevant for Live mode)
         st.markdown("### 🔐 AWS Connection")
         
-        if BOTO3_AVAILABLE:
+        if st.session_state.app_mode == 'demo':
+            st.markdown("_Not required in Demo mode_")
+        elif BOTO3_AVAILABLE:
             aws_creds = get_aws_credentials()
-            if aws_creds:
+            
+            if aws_creds and aws_creds.source == "secrets":
                 st.success("✓ AWS credentials from secrets")
+                # Test connection if not already connected
+                if not st.session_state.get('aws_connected'):
+                    session = create_aws_session(aws_creds)
+                    if session:
+                        success, msg = test_aws_connection(session)
+                        if success:
+                            st.session_state.aws_session = session
+                            st.session_state.aws_connected = True
+                            st.success(f"✓ Connected")
+                        else:
+                            st.error(f"Connection failed: {msg}")
+                else:
+                    st.success("✓ Connected to AWS")
             elif st.session_state.get('aws_connected'):
-                st.success("✓ AWS connected")
+                st.success("✓ AWS connected (manual)")
             else:
-                with st.expander("Enter AWS Credentials"):
-                    access_key = st.text_input("Access Key ID", type="password")
-                    secret_key = st.text_input("Secret Access Key", type="password")
-                    region = st.selectbox("Region", ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"])
+                st.warning("AWS credentials not found in secrets")
+                with st.expander("Enter AWS Credentials Manually"):
+                    access_key = st.text_input("Access Key ID", type="password", key="aws_access_key")
+                    secret_key = st.text_input("Secret Access Key", type="password", key="aws_secret_key")
+                    region = st.selectbox("Region", ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"], key="aws_region")
                     
                     if st.button("Connect to AWS"):
                         if access_key and secret_key:
                             creds = AWSCredentials(
                                 access_key_id=access_key,
                                 secret_access_key=secret_key,
-                                region=region
+                                region=region,
+                                source="manual"
                             )
                             session = create_aws_session(creds)
                             if session:
@@ -970,7 +1276,7 @@ def render_sidebar():
         
         st.markdown("---")
         
-        # Module Status
+        # Component Status
         st.markdown("### 📦 Components")
         components = {
             "AI Analysis": ANTHROPIC_AVAILABLE,
@@ -998,65 +1304,115 @@ def render_sidebar():
 
 def render_aws_scanner_tab():
     """Render AWS Scanner tab"""
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
-        <h2 style="color: #98FB98; margin: 0;">🎯 One-Touch AWS Scanner</h2>
-        <p style="color: #90EE90; margin: 0.5rem 0 0 0;">Automatic WAF assessment from your AWS resources</p>
-    </div>
-    """, unsafe_allow_html=True)
+    is_demo = st.session_state.get('app_mode', 'demo') == 'demo'
     
-    if not BOTO3_AVAILABLE:
-        st.error("❌ boto3 not installed. Add `boto3` to requirements.txt")
-        return
-    
-    if not st.session_state.get('aws_connected') and not get_aws_credentials():
-        st.warning("⚠️ Connect to AWS first using the sidebar")
-        return
-    
-    # Get session
-    if st.session_state.get('aws_session'):
-        session = st.session_state.aws_session
+    if is_demo:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1565C0 0%, #1976D2 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+            <h2 style="color: #FFFFFF; margin: 0;">🎭 Demo Mode - AWS Scanner</h2>
+            <p style="color: #BBDEFB; margin: 0.5rem 0 0 0;">Experience the scanner with realistic sample data</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.info("🎭 **Demo Mode**: This uses pre-built sample data to demonstrate the scanner capabilities. Switch to Live mode in the sidebar to connect to your real AWS account.")
     else:
-        creds = get_aws_credentials()
-        if creds:
-            session = create_aws_session(creds)
-            st.session_state.aws_session = session
-        else:
-            st.error("No AWS session available")
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+            <h2 style="color: #98FB98; margin: 0;">🔴 Live Mode - AWS Scanner</h2>
+            <p style="color: #90EE90; margin: 0.5rem 0 0 0;">Scanning your real AWS resources</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if not BOTO3_AVAILABLE:
+            st.error("❌ boto3 not installed. Add `boto3` to requirements.txt")
+            return
+        
+        if not st.session_state.get('aws_connected'):
+            st.warning("⚠️ Connect to AWS first using the sidebar, or switch to Demo mode.")
             return
     
+    # Region selection (different options for demo vs live)
     col1, col2 = st.columns(2)
     with col1:
-        selected_regions = st.multiselect(
-            "Regions to Scan",
-            ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
-            default=["us-east-1"]
-        )
+        if is_demo:
+            selected_regions = st.multiselect(
+                "Regions (Demo)",
+                ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+                default=["us-east-1", "us-west-2"],
+                disabled=True
+            )
+        else:
+            selected_regions = st.multiselect(
+                "Regions to Scan",
+                ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1", "ap-northeast-1", "eu-central-1"],
+                default=["us-east-1"]
+            )
     with col2:
         generate_pdf = st.checkbox("📄 Generate PDF Report", value=True)
     
-    if st.button("🚀 Run One-Touch Assessment", type="primary", use_container_width=True):
+    # Scan button
+    button_text = "🎭 Run Demo Assessment" if is_demo else "🚀 Run Live Assessment"
+    button_type = "secondary" if is_demo else "primary"
+    
+    if st.button(button_text, type=button_type, use_container_width=True):
         progress_bar = st.progress(0)
         status_text = st.empty()
         
-        def update_progress(progress, message):
-            progress_bar.progress(progress)
-            status_text.text(message)
-        
-        scanner = AWSLandscapeScanner(session)
-        
-        with st.spinner("Scanning AWS resources..."):
-            assessment = scanner.run_scan(selected_regions, update_progress)
-        
-        progress_bar.progress(1.0)
-        status_text.text("✅ Scan complete!")
+        if is_demo:
+            # Demo mode - use sample data
+            import time
+            
+            demo_steps = [
+                (0.1, "Initializing demo environment..."),
+                (0.2, "Loading IAM configuration..."),
+                (0.3, "Scanning S3 buckets..."),
+                (0.4, "Analyzing EC2 instances..."),
+                (0.5, "Checking RDS databases..."),
+                (0.6, "Reviewing VPC configuration..."),
+                (0.7, "Analyzing CloudTrail..."),
+                (0.8, "Checking Lambda functions..."),
+                (0.9, "Calculating pillar scores..."),
+                (1.0, "Generating assessment report...")
+            ]
+            
+            for progress, message in demo_steps:
+                progress_bar.progress(progress)
+                status_text.text(message)
+                time.sleep(0.3)
+            
+            assessment = generate_demo_assessment()
+            status_text.text("✅ Demo assessment complete!")
+        else:
+            # Live mode - real AWS scan
+            def update_progress(progress, message):
+                progress_bar.progress(progress)
+                status_text.text(message)
+            
+            session = st.session_state.aws_session
+            if not session:
+                creds = get_aws_credentials()
+                if creds:
+                    session = create_aws_session(creds)
+                    st.session_state.aws_session = session
+            
+            if not session:
+                st.error("No AWS session available")
+                return
+            
+            scanner = AWSLandscapeScanner(session)
+            
+            with st.spinner("Scanning AWS resources..."):
+                assessment = scanner.run_scan(selected_regions, update_progress)
+            
+            status_text.text("✅ Live scan complete!")
         
         st.session_state.landscape_assessment = assessment
         
         # Show results
-        st.success(f"✅ Found {len(assessment.findings)} findings")
+        mode_indicator = "🎭 Demo" if is_demo else "🔴 Live"
+        st.success(f"{mode_indicator} | Found {len(assessment.findings)} findings across {len(assessment.services_scanned)} services")
         
-        # Metrics
+        # Metrics row
         col1, col2, col3, col4 = st.columns(4)
         score_color = "#388E3C" if assessment.overall_score >= 80 else "#FBC02D" if assessment.overall_score >= 60 else "#D32F2F"
         
@@ -1068,12 +1424,32 @@ def render_aws_scanner_tab():
             </div>
             """, unsafe_allow_html=True)
         with col2:
-            st.metric("Risk Level", assessment.overall_risk)
+            risk_icon = {"Low": "🟢", "Medium": "🟡", "High": "🟠", "Critical": "🔴"}.get(assessment.overall_risk, "⚪")
+            st.metric("Risk Level", f"{risk_icon} {assessment.overall_risk}")
         with col3:
-            st.metric("Findings", len(assessment.findings))
+            st.metric("Total Findings", len(assessment.findings))
         with col4:
             critical = sum(1 for f in assessment.findings if f.severity == 'CRITICAL')
-            st.metric("Critical", critical)
+            high = sum(1 for f in assessment.findings if f.severity == 'HIGH')
+            st.metric("Critical/High", f"{critical}/{high}")
+        
+        # Resource Inventory
+        st.markdown("### 📦 Resource Inventory")
+        inv = assessment.inventory
+        
+        inv_col1, inv_col2, inv_col3, inv_col4 = st.columns(4)
+        with inv_col1:
+            st.metric("EC2 Instances", f"{inv.ec2_running}/{inv.ec2_instances} running")
+            st.metric("Lambda Functions", inv.lambda_functions)
+        with inv_col2:
+            st.metric("RDS Databases", f"{inv.rds_multi_az}/{inv.rds_instances} Multi-AZ")
+            st.metric("EKS Clusters", inv.eks_clusters)
+        with inv_col3:
+            st.metric("S3 Buckets", f"{inv.s3_buckets} ({inv.s3_public} public)")
+            st.metric("VPCs", inv.vpcs)
+        with inv_col4:
+            st.metric("IAM Users", f"{inv.iam_users} ({inv.iam_users_no_mfa} no MFA)")
+            st.metric("EBS Volumes", f"{inv.ebs_volumes} ({inv.ebs_unattached} unattached)")
         
         # Pillar scores
         st.markdown("### 📊 Pillar Scores")
@@ -1085,32 +1461,64 @@ def render_aws_scanner_tab():
             with cols[idx % 6]:
                 color = "#388E3C" if data['score'] >= 80 else "#FBC02D" if data['score'] >= 60 else "#D32F2F"
                 st.markdown(f"""
-                <div style="text-align: center; padding: 0.5rem; background: white; border-radius: 8px;">
+                <div style="text-align: center; padding: 0.5rem; background: white; border-radius: 8px; margin-bottom: 0.5rem;">
                     <div style="font-size: 1.5rem;">{icons.get(pillar, '📊')}</div>
                     <div style="font-size: 1.5rem; font-weight: bold; color: {color};">{data['score']}</div>
                     <div style="font-size: 0.7rem; color: #666;">{pillar.split()[0]}</div>
                 </div>
                 """, unsafe_allow_html=True)
         
+        # Services scanned
+        with st.expander("📋 Services Scanned"):
+            for service, success in assessment.services_scanned.items():
+                if success:
+                    st.markdown(f"✅ {service}")
+                else:
+                    error = assessment.scan_errors.get(service, "Unknown error")
+                    st.markdown(f"❌ {service}: {error}")
+        
         # Top findings
         st.markdown("### 🚨 Top Findings")
         for finding in assessment.findings[:10]:
-            severity_icon = {'CRITICAL': '🔴', 'HIGH': '🟠', 'MEDIUM': '🟡', 'LOW': '🟢'}.get(finding.severity, '⚪')
+            severity_icon = {'CRITICAL': '🔴', 'HIGH': '🟠', 'MEDIUM': '🟡', 'LOW': '🟢', 'INFO': 'ℹ️'}.get(finding.severity, '⚪')
             with st.expander(f"{severity_icon} {finding.title}"):
-                st.markdown(f"**Pillar:** {finding.pillar} | **Service:** {finding.source_service}")
-                st.markdown(f"**Description:** {finding.description}")
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    st.markdown(f"**Pillar:** {finding.pillar}")
+                    st.markdown(f"**Service:** {finding.source_service}")
+                    st.markdown(f"**Description:** {finding.description}")
+                with col2:
+                    st.markdown(f"**Severity:** {finding.severity}")
+                    st.markdown(f"**Effort:** {finding.effort}")
+                    if finding.estimated_savings > 0:
+                        st.markdown(f"**Savings:** ${finding.estimated_savings:,.0f}/mo")
+                
+                if finding.affected_resources:
+                    st.markdown(f"**Affected Resources:** {', '.join(finding.affected_resources[:5])}")
                 if finding.recommendation:
-                    st.markdown(f"**Recommendation:** {finding.recommendation}")
+                    st.success(f"💡 **Recommendation:** {finding.recommendation}")
+        
+        # Cost savings summary
+        total_savings = sum(f.estimated_savings for f in assessment.findings if f.estimated_savings > 0)
+        if total_savings > 0:
+            st.markdown("### 💰 Cost Optimization Opportunities")
+            st.markdown(f"**Total Monthly Savings Potential:** ${total_savings:,.2f}")
+            
+            savings_findings = [f for f in assessment.findings if f.estimated_savings > 0]
+            for f in sorted(savings_findings, key=lambda x: x.estimated_savings, reverse=True)[:5]:
+                st.markdown(f"- {f.title}: **${f.estimated_savings:,.0f}/mo**")
         
         # PDF download
         if generate_pdf and REPORTLAB_AVAILABLE:
             st.markdown("---")
+            st.markdown("### 📄 Download Report")
             try:
                 pdf_bytes = generate_pdf_report(assessment)
+                mode_label = "Demo" if is_demo else "Live"
                 st.download_button(
-                    "📥 Download PDF Report",
+                    f"📥 Download PDF Report ({mode_label})",
                     pdf_bytes,
-                    file_name=f"AWS_WAF_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    file_name=f"AWS_WAF_Report_{mode_label}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                     mime="application/pdf"
                 )
             except Exception as e:
@@ -1276,37 +1684,40 @@ def main():
     init_session_state()
     render_sidebar()
     
-    # Header
-    st.markdown("""
+    # Mode indicator
+    is_demo = st.session_state.get('app_mode', 'demo') == 'demo'
+    mode_badge = "🎭 Demo Mode" if is_demo else "🔴 Live Mode"
+    mode_color = "#1565C0" if is_demo else "#2E7D32"
+    
+    # Header with mode indicator
+    st.markdown(f"""
     <div class="main-header">
-        <h1>🏗️ AWS Well-Architected Framework Advisor</h1>
-        <p>AI-Powered Architecture Review & Risk Assessment</p>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h1>🏗️ AWS Well-Architected Framework Advisor</h1>
+                <p>AI-Powered Architecture Review & Risk Assessment</p>
+            </div>
+            <div style="background: {mode_color}; padding: 0.5rem 1rem; border-radius: 20px; color: white; font-weight: 600;">
+                {mode_badge}
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Build tabs
-    tab_names = []
-    if BOTO3_AVAILABLE:
-        tab_names.append("🎯 AWS Scanner")
-    tab_names.extend(["📤 Architecture Review", "📊 WAF Results", "📚 Knowledge Base"])
-    
+    # Build tabs - Scanner always available (demo mode doesn't need boto3)
+    tab_names = ["🎯 AWS Scanner", "📤 Architecture Review", "📊 WAF Results", "📚 Knowledge Base"]
     tabs = st.tabs(tab_names)
-    tab_idx = 0
     
-    if BOTO3_AVAILABLE:
-        with tabs[tab_idx]:
-            render_aws_scanner_tab()
-        tab_idx += 1
+    with tabs[0]:
+        render_aws_scanner_tab()
     
-    with tabs[tab_idx]:
+    with tabs[1]:
         render_upload_tab()
-    tab_idx += 1
     
-    with tabs[tab_idx]:
+    with tabs[2]:
         render_results_tab()
-    tab_idx += 1
     
-    with tabs[tab_idx]:
+    with tabs[3]:
         render_knowledge_base_tab()
 
 if __name__ == "__main__":
