@@ -281,52 +281,104 @@ def get_api_key() -> Optional[str]:
     
     return None
 
-def get_aws_credentials() -> Optional[AWSCredentials]:
-    """Get AWS credentials from various sources"""
+def get_aws_credentials() -> Tuple[Optional[AWSCredentials], Optional[str]]:
+    """
+    Get AWS credentials from various sources.
+    Returns tuple of (credentials, debug_info)
+    """
+    debug_info = []
+    
     # Check session state first (manual input takes priority)
     if st.session_state.get('aws_credentials'):
-        return st.session_state.aws_credentials
+        return st.session_state.aws_credentials, "Found in session state"
     
     # Check Streamlit secrets - try multiple formats
     try:
         if hasattr(st, 'secrets'):
-            # Format 1: [aws] section
+            debug_info.append(f"Secrets keys: {list(st.secrets.keys())}")
+            
+            # FORMAT 1: [aws] section with various key names
             if 'aws' in st.secrets:
-                aws_secrets = st.secrets['aws']
-                access_key = aws_secrets.get('access_key_id') or aws_secrets.get('ACCESS_KEY_ID')
-                secret_key = aws_secrets.get('secret_access_key') or aws_secrets.get('SECRET_ACCESS_KEY')
+                aws_secrets = dict(st.secrets['aws'])
+                debug_info.append(f"[aws] section keys: {list(aws_secrets.keys())}")
+                
+                # Try different key name variations
+                access_key = (
+                    aws_secrets.get('access_key_id') or 
+                    aws_secrets.get('ACCESS_KEY_ID') or
+                    aws_secrets.get('aws_access_key_id') or
+                    aws_secrets.get('AWS_ACCESS_KEY_ID')
+                )
+                secret_key = (
+                    aws_secrets.get('secret_access_key') or 
+                    aws_secrets.get('SECRET_ACCESS_KEY') or
+                    aws_secrets.get('aws_secret_access_key') or
+                    aws_secrets.get('AWS_SECRET_ACCESS_KEY')
+                )
+                region = (
+                    aws_secrets.get('default_region') or 
+                    aws_secrets.get('region') or 
+                    aws_secrets.get('AWS_REGION') or
+                    aws_secrets.get('aws_region') or
+                    'us-east-1'
+                )
+                session_token = (
+                    aws_secrets.get('session_token') or
+                    aws_secrets.get('SESSION_TOKEN') or
+                    aws_secrets.get('aws_session_token') or
+                    aws_secrets.get('AWS_SESSION_TOKEN')
+                )
                 
                 if access_key and secret_key:
-                    creds = AWSCredentials(
+                    debug_info.append("SUCCESS: Found credentials in [aws] section")
+                    return AWSCredentials(
                         access_key_id=access_key,
                         secret_access_key=secret_key,
-                        session_token=aws_secrets.get('session_token') or aws_secrets.get('SESSION_TOKEN'),
-                        region=aws_secrets.get('default_region') or aws_secrets.get('region') or aws_secrets.get('AWS_REGION') or 'us-east-1',
+                        session_token=session_token,
+                        region=region,
                         source="secrets"
-                    )
-                    return creds
+                    ), "\n".join(debug_info)
+                else:
+                    debug_info.append(f"[aws] section missing keys. Has access_key: {access_key is not None}, Has secret_key: {secret_key is not None}")
             
-            # Format 2: Flat AWS_ prefixed keys
+            # FORMAT 2: Flat AWS_ prefixed keys (uppercase)
             access_key = st.secrets.get('AWS_ACCESS_KEY_ID')
             secret_key = st.secrets.get('AWS_SECRET_ACCESS_KEY')
             if access_key and secret_key:
+                debug_info.append("SUCCESS: Found flat AWS_ keys")
                 return AWSCredentials(
                     access_key_id=access_key,
                     secret_access_key=secret_key,
                     session_token=st.secrets.get('AWS_SESSION_TOKEN'),
                     region=st.secrets.get('AWS_REGION', 'us-east-1'),
                     source="secrets"
-                )
+                ), "\n".join(debug_info)
+            
+            # FORMAT 3: Flat aws_ prefixed keys (lowercase)
+            access_key = st.secrets.get('aws_access_key_id')
+            secret_key = st.secrets.get('aws_secret_access_key')
+            if access_key and secret_key:
+                debug_info.append("SUCCESS: Found flat aws_ keys")
+                return AWSCredentials(
+                    access_key_id=access_key,
+                    secret_access_key=secret_key,
+                    session_token=st.secrets.get('aws_session_token'),
+                    region=st.secrets.get('aws_region', 'us-east-1'),
+                    source="secrets"
+                ), "\n".join(debug_info)
+            
+            debug_info.append("No valid AWS credentials found in any format")
+            
     except Exception as e:
-        pass
+        debug_info.append(f"Error reading secrets: {type(e).__name__}: {str(e)}")
     
-    return None
+    return None, "\n".join(debug_info) if debug_info else "No secrets available"
 
 def init_session_state():
     """Initialize session state variables"""
     # Get credentials from secrets on first load
     api_key = get_api_key()
-    aws_creds = get_aws_credentials()
+    aws_creds, aws_debug = get_aws_credentials()
     
     defaults = {
         'anthropic_api_key': api_key,
@@ -336,7 +388,8 @@ def init_session_state():
         'analysis_results': None,
         'organization_context': '',
         'landscape_assessment': None,
-        'app_mode': 'demo'  # 'demo' or 'live'
+        'app_mode': 'demo',  # 'demo' or 'live'
+        'aws_debug_info': aws_debug  # Store debug info
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1224,7 +1277,7 @@ def render_sidebar():
         if st.session_state.app_mode == 'demo':
             st.markdown("_Not required in Demo mode_")
         elif BOTO3_AVAILABLE:
-            aws_creds = get_aws_credentials()
+            aws_creds, aws_debug = get_aws_credentials()
             
             if aws_creds and aws_creds.source == "secrets":
                 st.success("✓ AWS credentials from secrets")
@@ -1234,6 +1287,7 @@ def render_sidebar():
                     if session:
                         success, msg = test_aws_connection(session)
                         if success:
+                            st.session_state.aws_credentials = aws_creds
                             st.session_state.aws_session = session
                             st.session_state.aws_connected = True
                             st.success(f"✓ Connected")
@@ -1245,6 +1299,27 @@ def render_sidebar():
                 st.success("✓ AWS connected (manual)")
             else:
                 st.warning("AWS credentials not found in secrets")
+                
+                # Show debug info to help troubleshoot
+                with st.expander("🔍 Debug: What's in your secrets?"):
+                    st.code(aws_debug or "No debug info available", language="text")
+                    st.markdown("""
+                    **Expected format in Streamlit Secrets:**
+                    ```toml
+                    [aws]
+                    access_key_id = "AKIA..."
+                    secret_access_key = "your-secret-key"
+                    default_region = "us-east-1"
+                    ```
+                    
+                    **Or flat format:**
+                    ```toml
+                    AWS_ACCESS_KEY_ID = "AKIA..."
+                    AWS_SECRET_ACCESS_KEY = "..."
+                    AWS_REGION = "us-east-1"
+                    ```
+                    """)
+                
                 with st.expander("Enter AWS Credentials Manually"):
                     access_key = st.text_input("Access Key ID", type="password", key="aws_access_key")
                     secret_key = st.text_input("Secret Access Key", type="password", key="aws_secret_key")
@@ -1390,7 +1465,7 @@ def render_aws_scanner_tab():
             
             session = st.session_state.aws_session
             if not session:
-                creds = get_aws_credentials()
+                creds, _ = get_aws_credentials()
                 if creds:
                     session = create_aws_session(creds)
                     st.session_state.aws_session = session
