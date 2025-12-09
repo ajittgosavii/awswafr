@@ -1751,6 +1751,470 @@ def render_knowledge_base_tab():
             st.markdown(f"[📖 AWS Documentation](https://docs.aws.amazon.com/wellarchitected/latest/framework/{key.replace('_', '-')}.html)")
 
 # ============================================================================
+# EKS & MODERNIZATION TAB
+# ============================================================================
+
+EKS_TOOLS_CATALOG = {
+    "container_runtime": {
+        "name": "Container Runtime",
+        "icon": "🐳",
+        "tools": [
+            {"name": "containerd", "description": "Industry-standard container runtime", "recommendation": "Default for EKS 1.24+"},
+            {"name": "Docker", "description": "Legacy runtime (deprecated)", "recommendation": "Migrate to containerd"},
+            {"name": "CRI-O", "description": "Lightweight OCI runtime", "recommendation": "Alternative option"}
+        ]
+    },
+    "service_mesh": {
+        "name": "Service Mesh",
+        "icon": "🕸️",
+        "tools": [
+            {"name": "AWS App Mesh", "description": "AWS-native service mesh", "recommendation": "Best for AWS integration"},
+            {"name": "Istio", "description": "Feature-rich open source mesh", "recommendation": "Complex workloads"},
+            {"name": "Linkerd", "description": "Lightweight service mesh", "recommendation": "Simpler deployments"}
+        ]
+    },
+    "observability": {
+        "name": "Observability",
+        "icon": "📊",
+        "tools": [
+            {"name": "Amazon CloudWatch Container Insights", "description": "Native AWS monitoring", "recommendation": "Default choice"},
+            {"name": "Prometheus + Grafana", "description": "Open source monitoring stack", "recommendation": "Custom dashboards"},
+            {"name": "Datadog", "description": "Commercial APM solution", "recommendation": "Enterprise features"},
+            {"name": "AWS X-Ray", "description": "Distributed tracing", "recommendation": "Trace analysis"}
+        ]
+    },
+    "security": {
+        "name": "Security",
+        "icon": "🔒",
+        "tools": [
+            {"name": "AWS IAM Roles for Service Accounts", "description": "Pod-level IAM", "recommendation": "Required"},
+            {"name": "Amazon GuardDuty for EKS", "description": "Threat detection", "recommendation": "Enable for all clusters"},
+            {"name": "Falco", "description": "Runtime security", "recommendation": "Advanced threat detection"},
+            {"name": "OPA Gatekeeper", "description": "Policy enforcement", "recommendation": "Governance"}
+        ]
+    },
+    "networking": {
+        "name": "Networking",
+        "icon": "🌐",
+        "tools": [
+            {"name": "AWS VPC CNI", "description": "Native VPC networking", "recommendation": "Default"},
+            {"name": "Calico", "description": "Network policies", "recommendation": "Enhanced policies"},
+            {"name": "AWS Load Balancer Controller", "description": "ALB/NLB integration", "recommendation": "Required"}
+        ]
+    },
+    "gitops": {
+        "name": "GitOps & CI/CD",
+        "icon": "🔄",
+        "tools": [
+            {"name": "ArgoCD", "description": "GitOps continuous delivery", "recommendation": "Popular choice"},
+            {"name": "Flux", "description": "CNCF GitOps toolkit", "recommendation": "Kubernetes-native"},
+            {"name": "AWS CodePipeline", "description": "AWS-native CI/CD", "recommendation": "AWS integration"},
+            {"name": "Jenkins X", "description": "Kubernetes-native Jenkins", "recommendation": "Jenkins users"}
+        ]
+    }
+}
+
+def render_eks_tab():
+    """Render EKS & Modernization tab"""
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+        <h2 style="color: #BBDEFB; margin: 0;">🚀 EKS & Container Modernization</h2>
+        <p style="color: #90CAF9; margin: 0.5rem 0 0 0;">Kubernetes tools catalog and CI/CD maturity assessment</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab1, tab2, tab3 = st.tabs(["🛠️ Tools Catalog", "📈 CI/CD Maturity", "🎯 Recommendations"])
+    
+    with tab1:
+        st.markdown("### EKS Ecosystem Tools")
+        
+        for category_key, category in EKS_TOOLS_CATALOG.items():
+            with st.expander(f"{category['icon']} {category['name']}", expanded=False):
+                for tool in category['tools']:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**{tool['name']}**")
+                        st.caption(tool['description'])
+                    with col2:
+                        st.info(tool['recommendation'])
+    
+    with tab2:
+        st.markdown("### CI/CD Maturity Assessment")
+        
+        st.markdown("Rate your current CI/CD practices:")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            source_control = st.select_slider("Source Control", options=["None", "Basic Git", "Branching Strategy", "GitFlow/Trunk"], value="Basic Git")
+            build_automation = st.select_slider("Build Automation", options=["Manual", "Scripts", "CI Server", "Fully Automated"], value="CI Server")
+            testing = st.select_slider("Testing", options=["Manual", "Unit Tests", "Integration", "Full Pipeline"], value="Unit Tests")
+        
+        with col2:
+            deployment = st.select_slider("Deployment", options=["Manual", "Scripts", "CD Pipeline", "GitOps"], value="Scripts")
+            monitoring = st.select_slider("Monitoring", options=["None", "Basic Logs", "Metrics", "Full Observability"], value="Basic Logs")
+            security = st.select_slider("Security Scanning", options=["None", "Manual", "Automated", "Shift-Left"], value="Manual")
+        
+        # Calculate maturity score
+        scores = {"None": 0, "Manual": 1, "Basic Git": 1, "Scripts": 2, "Basic Logs": 1, 
+                  "Branching Strategy": 2, "CI Server": 3, "Unit Tests": 2, "Metrics": 2,
+                  "Integration": 3, "CD Pipeline": 3, "Automated": 3,
+                  "GitFlow/Trunk": 3, "Fully Automated": 4, "Full Pipeline": 4, "GitOps": 4, 
+                  "Full Observability": 4, "Shift-Left": 4}
+        
+        total = sum(scores.get(v, 0) for v in [source_control, build_automation, testing, deployment, monitoring, security])
+        max_score = 24
+        maturity_pct = int((total / max_score) * 100)
+        
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            level = "Advanced" if maturity_pct >= 75 else "Intermediate" if maturity_pct >= 50 else "Basic" if maturity_pct >= 25 else "Initial"
+            st.metric("Maturity Level", level)
+        with col2:
+            st.metric("Maturity Score", f"{maturity_pct}%")
+        with col3:
+            st.metric("Next Goal", f"{min(100, maturity_pct + 25)}%")
+    
+    with tab3:
+        st.markdown("### Recommended Modernization Path")
+        
+        st.markdown("""
+        **Phase 1: Foundation (0-3 months)**
+        - Set up EKS cluster with managed node groups
+        - Implement AWS VPC CNI and Load Balancer Controller
+        - Enable CloudWatch Container Insights
+        - Configure IAM Roles for Service Accounts (IRSA)
+        
+        **Phase 2: Security & Governance (3-6 months)**
+        - Enable GuardDuty for EKS
+        - Implement network policies with Calico
+        - Set up OPA Gatekeeper for policy enforcement
+        - Implement secrets management with AWS Secrets Manager
+        
+        **Phase 3: Advanced Operations (6-12 months)**
+        - Deploy service mesh (App Mesh or Istio)
+        - Implement GitOps with ArgoCD or Flux
+        - Set up progressive delivery (Canary/Blue-Green)
+        - Implement cost optimization with Karpenter
+        """)
+
+# ============================================================================
+# FINOPS TAB
+# ============================================================================
+
+COST_CATEGORIES = {
+    "compute": {"name": "Compute", "icon": "💻", "services": ["EC2", "Lambda", "ECS", "EKS", "Fargate"]},
+    "storage": {"name": "Storage", "icon": "💾", "services": ["S3", "EBS", "EFS", "FSx", "Glacier"]},
+    "database": {"name": "Database", "icon": "🗄️", "services": ["RDS", "DynamoDB", "ElastiCache", "Redshift"]},
+    "network": {"name": "Network", "icon": "🌐", "services": ["VPC", "CloudFront", "Route53", "Direct Connect"]},
+    "other": {"name": "Other", "icon": "📦", "services": ["Support", "Marketplace", "Other"]}
+}
+
+def render_finops_tab():
+    """Render FinOps tab"""
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+        <h2 style="color: #C8E6C9; margin: 0;">💰 FinOps & Cost Optimization</h2>
+        <p style="color: #A5D6A7; margin: 0.5rem 0 0 0;">Cloud financial management and optimization strategies</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab1, tab2, tab3 = st.tabs(["📊 Cost Analysis", "💡 Optimization", "📈 Maturity"])
+    
+    with tab1:
+        st.markdown("### Cost Breakdown Simulator")
+        st.info("💡 Enter your estimated monthly costs by category")
+        
+        col1, col2 = st.columns(2)
+        costs = {}
+        
+        with col1:
+            costs['compute'] = st.number_input("💻 Compute (EC2, Lambda, etc.)", min_value=0, value=5000)
+            costs['storage'] = st.number_input("💾 Storage (S3, EBS, etc.)", min_value=0, value=1500)
+            costs['database'] = st.number_input("🗄️ Database (RDS, DynamoDB)", min_value=0, value=2000)
+        
+        with col2:
+            costs['network'] = st.number_input("🌐 Network (Data Transfer)", min_value=0, value=800)
+            costs['other'] = st.number_input("📦 Other Services", min_value=0, value=700)
+        
+        total_cost = sum(costs.values())
+        
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Monthly Cost", f"${total_cost:,.0f}")
+        with col2:
+            st.metric("Annual Projection", f"${total_cost * 12:,.0f}")
+        with col3:
+            # Estimate potential savings (20-30% typical)
+            savings = total_cost * 0.25
+            st.metric("Potential Savings", f"${savings:,.0f}/mo", delta="-25%")
+    
+    with tab2:
+        st.markdown("### Cost Optimization Strategies")
+        
+        strategies = [
+            {"name": "Reserved Instances / Savings Plans", "savings": "Up to 72%", "effort": "Low", "description": "Commit to 1-3 year usage for steady-state workloads"},
+            {"name": "Right-sizing", "savings": "10-30%", "effort": "Medium", "description": "Match instance sizes to actual utilization"},
+            {"name": "Spot Instances", "savings": "Up to 90%", "effort": "Medium", "description": "Use for fault-tolerant, flexible workloads"},
+            {"name": "Auto Scaling", "savings": "15-40%", "effort": "Medium", "description": "Scale resources based on demand"},
+            {"name": "Storage Tiering", "savings": "20-50%", "effort": "Low", "description": "Move infrequent data to cheaper storage classes"},
+            {"name": "Idle Resource Cleanup", "savings": "5-20%", "effort": "Low", "description": "Remove unattached EBS, unused EIPs, old snapshots"},
+            {"name": "Graviton Migration", "savings": "20-40%", "effort": "Medium", "description": "Use ARM-based instances for better price-performance"}
+        ]
+        
+        for strategy in strategies:
+            with st.expander(f"💡 {strategy['name']} - Save {strategy['savings']}"):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(strategy['description'])
+                with col2:
+                    st.caption(f"Effort: {strategy['effort']}")
+    
+    with tab3:
+        st.markdown("### FinOps Maturity Assessment")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            visibility = st.select_slider("Cost Visibility", options=["None", "Basic", "Detailed", "Real-time"], value="Basic")
+            allocation = st.select_slider("Cost Allocation", options=["None", "Account-level", "Tagged", "Chargeback"], value="Account-level")
+            forecasting = st.select_slider("Forecasting", options=["None", "Manual", "Automated", "ML-based"], value="Manual")
+        
+        with col2:
+            optimization = st.select_slider("Optimization", options=["Reactive", "Periodic", "Continuous", "Automated"], value="Periodic")
+            governance = st.select_slider("Governance", options=["None", "Policies", "Budgets", "Guardrails"], value="Policies")
+            culture = st.select_slider("FinOps Culture", options=["Siloed", "Aware", "Collaborative", "Embedded"], value="Aware")
+        
+        scores = {"None": 0, "Reactive": 1, "Siloed": 1, "Basic": 1, "Account-level": 1, "Manual": 1, "Policies": 1, "Aware": 1,
+                  "Detailed": 2, "Tagged": 2, "Automated": 2, "Periodic": 2, "Budgets": 2, "Collaborative": 2,
+                  "Real-time": 3, "Chargeback": 3, "ML-based": 3, "Continuous": 3, "Guardrails": 3, "Embedded": 3,
+                  "Automated": 4}
+        
+        total = sum(scores.get(v, 0) for v in [visibility, allocation, forecasting, optimization, governance, culture])
+        maturity_pct = int((total / 18) * 100)
+        
+        st.markdown("---")
+        phase = "Run" if maturity_pct >= 66 else "Walk" if maturity_pct >= 33 else "Crawl"
+        st.metric("FinOps Phase", phase, help="Crawl → Walk → Run")
+
+# ============================================================================
+# COMPLIANCE TAB
+# ============================================================================
+
+COMPLIANCE_FRAMEWORKS = {
+    "soc2": {"name": "SOC 2", "icon": "🔐", "focus": "Security, Availability, Confidentiality"},
+    "hipaa": {"name": "HIPAA", "icon": "🏥", "focus": "Healthcare data protection"},
+    "pci_dss": {"name": "PCI DSS", "icon": "💳", "focus": "Payment card data security"},
+    "gdpr": {"name": "GDPR", "icon": "🇪🇺", "focus": "EU data privacy"},
+    "iso27001": {"name": "ISO 27001", "icon": "📋", "focus": "Information security management"},
+    "fedramp": {"name": "FedRAMP", "icon": "🏛️", "focus": "US federal cloud security"},
+    "nist": {"name": "NIST CSF", "icon": "🔬", "focus": "Cybersecurity framework"},
+    "cis": {"name": "CIS Benchmarks", "icon": "📊", "focus": "Security configuration"}
+}
+
+def render_compliance_tab():
+    """Render Compliance tab"""
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #4a148c 0%, #7b1fa2 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+        <h2 style="color: #E1BEE7; margin: 0;">📋 Compliance & Governance</h2>
+        <p style="color: #CE93D8; margin: 0.5rem 0 0 0;">Regulatory compliance assessment and control mapping</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab1, tab2, tab3 = st.tabs(["🎯 Framework Selection", "📊 Gap Analysis", "🔧 Controls"])
+    
+    with tab1:
+        st.markdown("### Select Applicable Compliance Frameworks")
+        
+        selected_frameworks = []
+        cols = st.columns(4)
+        
+        for idx, (key, framework) in enumerate(COMPLIANCE_FRAMEWORKS.items()):
+            with cols[idx % 4]:
+                if st.checkbox(f"{framework['icon']} {framework['name']}", key=f"fw_{key}"):
+                    selected_frameworks.append(key)
+                st.caption(framework['focus'])
+        
+        if selected_frameworks:
+            st.success(f"Selected {len(selected_frameworks)} framework(s)")
+            st.session_state['selected_frameworks'] = selected_frameworks
+    
+    with tab2:
+        st.markdown("### Compliance Gap Analysis")
+        
+        if not st.session_state.get('selected_frameworks'):
+            st.info("Select frameworks in the previous tab to run gap analysis")
+        else:
+            st.markdown("Rate your current compliance posture:")
+            
+            control_areas = [
+                "Access Control", "Data Encryption", "Logging & Monitoring",
+                "Network Security", "Incident Response", "Data Backup",
+                "Vulnerability Management", "Change Management"
+            ]
+            
+            scores = {}
+            cols = st.columns(2)
+            
+            for idx, area in enumerate(control_areas):
+                with cols[idx % 2]:
+                    scores[area] = st.slider(area, 0, 100, 60, key=f"gap_{area}")
+            
+            avg_score = sum(scores.values()) / len(scores)
+            
+            st.markdown("---")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                color = "green" if avg_score >= 80 else "orange" if avg_score >= 60 else "red"
+                st.metric("Overall Compliance Score", f"{avg_score:.0f}%")
+            with col2:
+                gaps = [k for k, v in scores.items() if v < 60]
+                st.metric("Critical Gaps", len(gaps))
+            with col3:
+                st.metric("Frameworks", len(st.session_state.get('selected_frameworks', [])))
+    
+    with tab3:
+        st.markdown("### AWS Security Controls")
+        
+        controls = [
+            {"service": "AWS IAM", "control": "MFA for all users", "status": "🟡 Partial"},
+            {"service": "AWS CloudTrail", "control": "Multi-region enabled", "status": "🟢 Compliant"},
+            {"service": "AWS Config", "control": "Rules configured", "status": "🟡 Partial"},
+            {"service": "AWS KMS", "control": "CMK for encryption", "status": "🟢 Compliant"},
+            {"service": "AWS GuardDuty", "control": "Threat detection enabled", "status": "🔴 Gap"},
+            {"service": "AWS Security Hub", "control": "Findings aggregation", "status": "🔴 Gap"},
+            {"service": "VPC", "control": "Flow logs enabled", "status": "🟡 Partial"},
+            {"service": "S3", "control": "Public access blocked", "status": "🟢 Compliant"},
+        ]
+        
+        for control in controls:
+            col1, col2, col3 = st.columns([2, 3, 1])
+            with col1:
+                st.markdown(f"**{control['service']}**")
+            with col2:
+                st.markdown(control['control'])
+            with col3:
+                st.markdown(control['status'])
+
+# ============================================================================
+# MIGRATION & DR TAB
+# ============================================================================
+
+MIGRATION_STRATEGIES = {
+    "rehost": {"name": "Rehost (Lift & Shift)", "icon": "🏗️", "effort": "Low", "description": "Move as-is to cloud"},
+    "replatform": {"name": "Replatform", "icon": "🔧", "effort": "Medium", "description": "Minor optimizations during migration"},
+    "repurchase": {"name": "Repurchase", "icon": "🛒", "effort": "Low", "description": "Move to SaaS solution"},
+    "refactor": {"name": "Refactor", "icon": "⚙️", "effort": "High", "description": "Re-architect for cloud-native"},
+    "retire": {"name": "Retire", "icon": "🗑️", "effort": "Low", "description": "Decommission application"},
+    "retain": {"name": "Retain", "icon": "📌", "effort": "None", "description": "Keep on-premises"}
+}
+
+DR_PATTERNS = {
+    "backup_restore": {"name": "Backup & Restore", "rto": "24+ hours", "rpo": "Hours", "cost": "$"},
+    "pilot_light": {"name": "Pilot Light", "rto": "Hours", "rpo": "Minutes", "cost": "$$"},
+    "warm_standby": {"name": "Warm Standby", "rto": "Minutes", "rpo": "Seconds", "cost": "$$$"},
+    "active_active": {"name": "Active-Active", "rto": "Near Zero", "rpo": "Near Zero", "cost": "$$$$"}
+}
+
+def render_migration_dr_tab():
+    """Render Migration & DR tab"""
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #bf360c 0%, #e64a19 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+        <h2 style="color: #FFCCBC; margin: 0;">🔄 Migration & Disaster Recovery</h2>
+        <p style="color: #FFAB91; margin: 0.5rem 0 0 0;">Cloud migration strategies and DR planning</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab1, tab2, tab3 = st.tabs(["🚀 Migration (7Rs)", "🛡️ DR Planning", "📋 Assessment"])
+    
+    with tab1:
+        st.markdown("### Migration Strategy Selection (7Rs)")
+        
+        for key, strategy in MIGRATION_STRATEGIES.items():
+            with st.expander(f"{strategy['icon']} {strategy['name']}"):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(strategy['description'])
+                    st.markdown(f"**Best for:** ", unsafe_allow_html=True)
+                    if key == "rehost":
+                        st.markdown("Quick migrations, legacy apps, time-sensitive moves")
+                    elif key == "replatform":
+                        st.markdown("Apps needing minor cloud optimizations")
+                    elif key == "refactor":
+                        st.markdown("Apps requiring scalability, microservices")
+                    elif key == "repurchase":
+                        st.markdown("Apps with good SaaS alternatives (CRM, HR)")
+                    elif key == "retire":
+                        st.markdown("Redundant or unused applications")
+                    else:
+                        st.markdown("Apps with compliance/latency requirements")
+                with col2:
+                    st.metric("Effort", strategy['effort'])
+    
+    with tab2:
+        st.markdown("### Disaster Recovery Patterns")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            rto_req = st.selectbox("Required RTO", ["24+ hours", "4-24 hours", "1-4 hours", "< 1 hour", "Near zero"])
+            rpo_req = st.selectbox("Required RPO", ["24+ hours", "1-24 hours", "1 hour", "Minutes", "Near zero"])
+        
+        with col2:
+            budget = st.selectbox("DR Budget Level", ["Minimal ($)", "Moderate ($$)", "Significant ($$$)", "Premium ($$$$)"])
+            criticality = st.selectbox("Application Criticality", ["Low", "Medium", "High", "Mission Critical"])
+        
+        st.markdown("---")
+        st.markdown("### Recommended DR Patterns")
+        
+        for key, pattern in DR_PATTERNS.items():
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.markdown(f"**{pattern['name']}**")
+            with col2:
+                st.markdown(f"RTO: {pattern['rto']}")
+            with col3:
+                st.markdown(f"RPO: {pattern['rpo']}")
+            with col4:
+                st.markdown(f"Cost: {pattern['cost']}")
+    
+    with tab3:
+        st.markdown("### Migration Readiness Assessment")
+        
+        st.markdown("Rate your organization's readiness:")
+        
+        areas = {
+            "Technical Readiness": ["Infrastructure documentation", "Application inventory", "Dependency mapping"],
+            "Organizational Readiness": ["Executive sponsorship", "Cloud skills", "Change management"],
+            "Operational Readiness": ["Monitoring strategy", "Security baseline", "Compliance requirements"]
+        }
+        
+        total_score = 0
+        max_score = 0
+        
+        for area, items in areas.items():
+            st.markdown(f"**{area}**")
+            for item in items:
+                score = st.slider(item, 0, 100, 50, key=f"mig_{item}")
+                total_score += score
+                max_score += 100
+        
+        readiness_pct = int((total_score / max_score) * 100)
+        
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            status = "Ready" if readiness_pct >= 75 else "Preparing" if readiness_pct >= 50 else "Early Stage"
+            st.metric("Migration Readiness", status)
+        with col2:
+            st.metric("Readiness Score", f"{readiness_pct}%")
+        with col3:
+            weeks = max(4, int((100 - readiness_pct) / 5))
+            st.metric("Est. Prep Time", f"{weeks} weeks")
+
+# ============================================================================
 # MAIN APP
 # ============================================================================
 
@@ -1779,8 +2243,18 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # Build tabs - Scanner always available (demo mode doesn't need boto3)
-    tab_names = ["🎯 AWS Scanner", "📤 Architecture Review", "📊 WAF Results", "📚 Knowledge Base"]
+    # Build all 8 tabs
+    tab_names = [
+        "🎯 AWS Scanner",
+        "📤 Architecture Review", 
+        "📊 WAF Results",
+        "🚀 EKS & CI/CD",
+        "💰 FinOps",
+        "📋 Compliance",
+        "🔄 Migration & DR",
+        "📚 Knowledge Base"
+    ]
+    
     tabs = st.tabs(tab_names)
     
     with tabs[0]:
@@ -1793,6 +2267,18 @@ def main():
         render_results_tab()
     
     with tabs[3]:
+        render_eks_tab()
+    
+    with tabs[4]:
+        render_finops_tab()
+    
+    with tabs[5]:
+        render_compliance_tab()
+    
+    with tabs[6]:
+        render_migration_dr_tab()
+    
+    with tabs[7]:
         render_knowledge_base_tab()
 
 if __name__ == "__main__":
